@@ -1,0 +1,55 @@
+A1 verification — passive cart-pole
+===================================
+Date: 2026-11-27
+Webots: R2025a
+World: E:\cart-pole-webots\worlds\cart_pole.wbt
+Controller: <none> (passive model, no actuator)
+
+Viewpoint fix
+-------------
+The original Viewpoint (orientation 1 0 0 1.2, position 0 -3 1.55) looked along
+the X axis and missed the model, producing a black 3D view. Replaced with:
+  orientation -0.184267 0.184267 0.965449 1.605951
+  position 0 -2.6 1.35
+
+Probe method
+------------
+A temporary copy (cart_pole_probe.wbt) added DEF CART, DEF POLE and a read-only
+Supervisor controller. The controller sampled the two PositionSensors and the
+cart/pole fields every 8 ms and wrote docs/a1-probe-run*.csv. The probe does not
+apply forces; the original world remains passive with controller "<none>".
+
+Key measurements (run 1)
+------------------------
+t = 0.008 s:
+  cart_position sensor : -0.000008 m
+  pole_angle sensor    : +0.080175 rad  (expected +0.08)
+  cart translation     : (-0.000008, 0.000000, 0.079999) m
+
+t = 2.000 s:
+  cart_position sensor : -0.043815 m
+  pole_angle sensor    : +1.400000 rad  (hits +1.4 rad hard stop)
+  cart translation     : (-0.043815, 0.000000, 0.079995) m
+  pole rotation axis   : (0, 1, 0), angle +1.400000 rad
+
+Ranges over 0..2 s:
+  cart x               : -0.044287 .. -0.000008 m   (moves about -4.4 cm)
+  cart y               : 0.000000 m                 (no lateral motion)
+  cart z               : 0.079991 .. 0.079999 m     (constant within 9 um)
+  pole angle           : +0.080175 .. +1.425100 rad (same side, +X)
+  first reach +1.4 rad : 0.624 s
+
+Reproducibility
+---------------
+Two independent runs from reset produced byte-identical CSV files:
+  SHA-256 13197477C389961B59C1DC7867DBC9D0BF3544E6F91C472F60289F93EC373E99
+  run 1 == run 2
+
+Result
+------
+PASS
+- World loads with no Console error.
+- Pole starts at +0.08 rad and falls toward +X under gravity.
+- Pole rotates only about the Y axis.
+- Cart moves only along X; y = 0 and z stays at 0.08 m.
+- Reset restores the initial state; two runs are numerically identical.
