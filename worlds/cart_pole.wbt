@@ -15,7 +15,8 @@ Shape {
 }
 Robot {
   name "cart_pole"
-  controller "cart_pole_lqr"
+  controller "cart_pole_lqr"
+  controllerArgs [ "step" ]
   children [
     SliderJoint {
       jointParameters JointParameters {

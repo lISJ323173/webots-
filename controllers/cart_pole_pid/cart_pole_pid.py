@@ -1,4 +1,5 @@
 import csv
+import sys
 from pathlib import Path
 
 from controller import Robot
@@ -24,35 +25,49 @@ if robot.step(step_ms) == -1:
 prev_x, prev_theta = cart.getValue(), pole.getValue()
 integral = 0.0
 peak_x = tail_x = tail_theta = 0.0
-log = Path(__file__).resolve().parents[2] / "a4_pid_balance.csv"
+
+mode = "pid"
+case = sys.argv[1] if len(sys.argv) > 1 else "step"
+if case not in ("step", "pulse", "mass"):
+    raise ValueError(f"Unknown test case: {case}")
+
+log = Path(__file__).resolve().parents[2] / f"a6_{mode}_{case}.csv"
+step_at = round(2.000 / dt)
+pulse_at = round(4.000 / dt)
+pulse_steps = round(0.080 / dt)
 
 with log.open("w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
-    writer.writerow(["t_s", "x_m", "theta_rad", "theta_ref_rad", "force_N"])
+    writer.writerow(["t_s", "x_ref_m", "x_m", "theta_rad", "disturbance_N", "force_N"])
     for k in range(round(10.0 / dt) + 1):
         t = k * dt
         x, theta = cart.getValue(), pole.getValue()
         v, omega = (x - prev_x) / dt, (theta - prev_theta) / dt
         prev_x, prev_theta = x, theta
 
-        theta_ref = clip(-0.0868 * x - 0.1403 * v, 0.15)
+        x_ref = 0.20 if case in ("step", "mass") and k >= step_at else 0.0
+        x_error = x - x_ref
+        disturbance = 3.0 if case == "pulse" and pulse_at <= k < pulse_at + pulse_steps else 0.0
+
+        theta_ref = clip(-0.0868 * x_error - 0.1403 * v, 0.15)
         error = theta - theta_ref
         integral = clip(integral + error * dt, 0.25)
         force = clip(46.66 * error + 8.23 * omega + integral, 10.0)
-        writer.writerow([t, x, theta, theta_ref, force])
+        force = clip(force + disturbance, 10.0)
+        writer.writerow([t, x_ref, x, theta, disturbance, force])
         peak_x = max(peak_x, abs(x))
         if t >= 8.0:
-            tail_x = max(tail_x, abs(x))
+            tail_x = max(tail_x, abs(x_error))
             tail_theta = max(tail_theta, abs(theta))
         if k == 0:
-            print(f"START theta={theta:+.4f} rad F={force:+.3f} N", flush=True)
+            print(f"START mode={mode} case={case} theta={theta:+.4f} rad F={force:+.3f} N", flush=True)
         if t < 10.0:
             motor.setForce(force)
             if robot.step(step_ms) == -1:
                 raise SystemExit
 
 motor.setForce(0.0)
-print(f"A4 peak_x={peak_x:.4f} m tail_x={tail_x:.4f} m "
-      f"tail_theta={tail_theta:.4f} rad", flush=True)
+print(f"A6 mode={mode} case={case} peak_x={peak_x:.4f} m "
+      f"tail_x={tail_x:.4f} m tail_theta={tail_theta:.4f} rad", flush=True)
 while robot.step(step_ms) != -1:
     pass

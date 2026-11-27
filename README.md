@@ -2,18 +2,27 @@
 
 Webots R2025a 的一阶倒立摆（cart-pole）仿真项目。
 
-已完成从被动模型到闭环站立的验证链：
+已完成从被动模型到闭环对比的验证链：
 
 - A1：被动 cart-pole，小车只沿 X 移动，摆杆自由倒下。
-- A2：Python 读取 `x`、`θ`，并验证 `±2 N` 施力方向。
+- A2：Python 读取 `x`、`θ`，验证 `±2 N` 施力方向。
 - A3：非线性动力学、A2 开环对照、直立点线性化。
 - A4：级联 PD-PID 站立 10 s。
 - A5：离散 LQR 站立 10 s。
+- A6：PID/LQR × `step`/`pulse`/`mass` 六组同工况对比。
 
-当前 `worlds/cart_pole.wbt` 使用 A5 控制器：
+当前基础世界 `worlds/cart_pole.wbt` 默认：
 
 ```text
 controller "cart_pole_lqr"
+controllerArgs [ "step" ]
+```
+
+质量摄动世界 `worlds/cart_pole_mass.wbt` 默认：
+
+```text
+controller "cart_pole_lqr"
+controllerArgs [ "mass" ]
 ```
 
 ## 当前状态
@@ -24,14 +33,15 @@ controller "cart_pole_lqr"
 - A3 动力学模型与开环校验：完成
 - A4 级联 PD-PID 站立：通过
 - A5 离散 LQR 站立：通过
-- A6 同工况对比（位置阶跃/扰动）：待开始
+- A6 六组同工况对比：通过
+- A7 曲线、调节时间和最终对比：待开始
 
 ## 模型参数
 
 | 符号 | 含义 | 值 |
 |---|---|---:|
 | `M` | 小车质量 | `1.00 kg` |
-| `m` | 摆杆质量 | `0.24 kg` |
+| `m` | 摆杆质量 | `0.24 kg`（mass 组 `0.30 kg`） |
 | `L` | 摆杆长度 | `0.50 m` |
 | `l` | 铰点到摆杆质心距离 | `0.25 m` |
 | `J_y` | 摆杆绕质心、平行于铰轴的转动惯量 | `0.00501 kg·m²` |
@@ -44,23 +54,26 @@ controller "cart_pole_lqr"
 
 - 世界坐标系：`ENU`，`+X` 向右，`+Y` 为铰轴方向，`+Z` 向上。
 - 直立为 `θ = 0 rad`；杆顶向 `+X` 倾斜为正。
-- 控制输入定义为小车沿 `+X` 的力 `F`，单位 `N`。
+- 控制输入为小车沿 `+X` 的力 `F`，单位 `N`；限幅 `±10 N`。
 - `cart_position` 单位为米；`pole_angle` 单位为弧度。
 
 ## 文件结构
 
 ```text
 cart-pole-webots/
-  worlds/cart_pole.wbt                  # 当前 A5 世界
+  worlds/
+    cart_pole.wbt                  # 基础世界，摆杆 0.24 kg
+    cart_pole_mass.wbt             # 质量摄动，摆杆 0.30 kg
   controllers/
-    cart_pole_lqr/cart_pole_lqr.py      # A5 离散 LQR
-    cart_pole_pid/cart_pole_pid.py      # A4 级联 PD-PID
-    cart_pole_probe/cart_pole_probe.py  # A2 探针
+    cart_pole_pid/cart_pole_pid.py # 级联 PD-PID + A6 工况
+    cart_pole_lqr/cart_pole_lqr.py # 离散 LQR + A6 工况
+    cart_pole_probe/cart_pole_probe.py # A2 探针
   docs/
     A1-acceptance.md
     A2-acceptance.md
     A4-acceptance.md
     A5-acceptance.md
+    A6-acceptance.md
     a1-initial.png
     a1-fall.png
     a1-verification.txt
@@ -70,51 +83,72 @@ cart-pole-webots/
     a2-negative.txt
     a4-console.txt
     a5-console.txt
-    model.md                            # A3 动力学模型与开环校验
-  a4_pid_balance.csv                    # A4 10 s 数据
-  a5_lqr_balance.csv                    # A5 10 s 数据
+    a6_pid_step.txt
+    a6_lqr_step.txt
+    a6_pid_pulse.txt
+    a6_lqr_pulse.txt
+    a6_pid_mass.txt
+    a6_lqr_mass.txt
+    model.md
+  a4_pid_balance.csv
+  a5_lqr_balance.csv
+  a6_pid_step.csv
+  a6_lqr_step.csv
+  a6_pid_pulse.csv
+  a6_lqr_pulse.csv
+  a6_pid_mass.csv
+  a6_lqr_mass.csv
   README.md
 ```
 
-## 运行 A5
+## A6 测试矩阵
 
-1. Webots R2025a → `File → Open World` → `worlds/cart_pole.wbt`。
-2. `Pause` → `Reset Simulation`，确认时间为 `0:00:00:000`。
-3. 使用 `Real-time` 或 `Fast` 运行 10 s。
-4. 控制器按 8 ms 周期采样 `x`、`θ`，差分得到 `\dot x`、`\dot\theta`，计算 `F = clip(-K s, ±10 N)`。
-5. Console 出现 `A5` 行后 `Pause`；项目根目录生成 `a5_lqr_balance.csv`。
+| 工况 | 世界设置 | 输入 |
+|---|---|---|
+| `step` | 摆杆 `0.24 kg` | `t=2.000 s` 位置目标 `0 → +0.20 m` |
+| `pulse` | 摆杆 `0.24 kg` | 目标保持 `0`；`t=4.000 s` 起叠加 `+3 N`，持续 `80 ms` |
+| `mass` | 摆杆 `0.30 kg` | 重复 `step` 的 `+0.20 m` 阶跃 |
 
-## A5 结果
+两种控制器使用同一组增益、同一 `8 ms` 步长、同一 `±10 N` 限幅、同一 `+0.08 rad` 初始角，每次从磁盘重新加载世界。
+
+## 运行 A6
+
+1. 在 `worlds/cart_pole.wbt` 或 `worlds/cart_pole_mass.wbt` 中选择 `controller`。
+2. 用 `controllerArgs [ "step" ]`、`[ "pulse" ]` 或 `[ "mass" ]` 选择工况。
+3. 从磁盘打开世界，`Pause` → `Reset Simulation`，确认 `0:00:00:000`。
+4. 用 `Real-time` 或 `Fast` 运行 10 s；Console 出现 `A6` 后暂停。
+5. 项目根目录生成 `a6_{mode}_{case}.csv`。
+
+## A6 结果
+
+```text
+A6 mode=pid case=step  peak_x=0.1943 m tail_x=0.0059 m tail_theta=0.0003 rad
+A6 mode=lqr case=step  peak_x=0.2058 m tail_x=0.0028 m tail_theta=0.0003 rad
+A6 mode=pid case=pulse peak_x=0.0934 m tail_x=0.0056 m tail_theta=0.0005 rad
+A6 mode=lqr case=pulse peak_x=0.0985 m tail_x=0.0012 m tail_theta=0.0002 rad
+A6 mode=pid case=mass  peak_x=0.1941 m tail_x=0.0062 m tail_theta=0.0003 rad
+A6 mode=lqr case=mass  peak_x=0.2050 m tail_x=0.0024 m tail_theta=0.0003 rad
+```
+
+| 工况 | 控制器 | `tail_x` (m) | `tail_theta` (rad) | 结果 |
+|---|---|---:|---:|---|
+| `step` | PID | `0.005933` | `0.000280` | 通过 |
+| `step` | LQR | `0.002826` | `0.000334` | 通过 |
+| `pulse` | PID | `0.005566` | `0.000532` | 通过 |
+| `pulse` | LQR | `0.001193` | `0.000173` | 通过 |
+| `mass` | PID | `0.006208` | `0.000308` | 通过 |
+| `mass` | LQR | `0.002435` | `0.000292` | 通过 |
+
+六组都跑满 10 s，最大 `|θ| ≈ 0.08018 rad`，未接近 `±1.4 rad` 限位；最大力在 `3.34 ～ 3.75 N`，未饱和。`pulse` 两组各有恰好 10 个连续 `disturbance_N = 3.0` 样本。
+
+初步观察：三个工况下 LQR 的 `tail_x` 都小于 PID；LQR 的首拍力和最大力也略小。`peak_x` 是绝对位置，`step`/`mass` 组因目标为 `0.20 m`，不能直接当作超调量。完整曲线、调节时间和超调量留到 A7。
+
+## A5 结果（历史记录）
 
 ```text
 START theta=+0.0802 rad F=+3.344 N
 A5 peak_x=0.0985 m tail_x=0.0022 m tail_theta=0.0003 rad
 ```
-
-| 检查项 | 通过标准 | 实测 |
-|---|---|---|
-| 初始角度 | 接近 `+0.08 rad` | `+0.08018 rad` |
-| 首拍力 | `F > 0 N` | `+3.344 N` |
-| 时长 | 10 s | 10.000 s，1251 行 |
-| 摆杆 | 不碰 `±1.4 rad` 限位 | 最大 `|θ| = 0.08018 rad` |
-| 小车峰值 | `peak_x ≤ 0.30 m` | `0.09852 m` |
-| 最后 2 s 小车 | `tail_x ≤ 0.05 m` | `0.00224 m` |
-| 最后 2 s 摆角 | `tail_theta ≤ 0.02 rad` | `0.00027 rad` |
-| 力饱和 | 不持续饱和 | 最大 `3.344 N < 10 N` |
-
-完整记录见 [docs/A5-acceptance.md](docs/A5-acceptance.md)。
-
-## A4 与 A5 初步对照
-
-| 指标 | A4 级联 PD-PID | A5 LQR |
-|---|---:|---:|
-| 首拍力 | `+3.742 N` | `+3.344 N` |
-| `peak_x` | `0.0934 m` | `0.0985 m` |
-| `tail_x` | `0.0004 m` | `0.0022 m` |
-| `tail_theta` | `0.0002 rad` | `0.0003 rad` |
-| 最大 `|F|` | `3.742 N` | `3.344 N` |
-
-两种控制器都通过站立验收线。就这次同工况而言，PID 的峰值和尾段位置误差更小，LQR 的首拍力和最大力略小；位置阶跃和扰动对比留到 A6。
 
 ## A4 结果（历史记录）
 
@@ -122,8 +156,6 @@ A5 peak_x=0.0985 m tail_x=0.0022 m tail_theta=0.0003 rad
 START theta=+0.0802 rad F=+3.742 N
 A4 peak_x=0.0934 m tail_x=0.0004 m tail_theta=0.0002 rad
 ```
-
-详细记录见 [docs/A4-acceptance.md](docs/A4-acceptance.md)，数据见 `a4_pid_balance.csv`。
 
 ## A3 动力学模型
 
@@ -155,19 +187,12 @@ B = [0; 0.9433; 0; -2.8281]
 
 开环正特征值约 `5.87 s⁻¹`。完整推导见 [docs/model.md](docs/model.md)。
 
-## A1/A2 历史记录
-
-- A1：被动摆杆从 `+0.08 rad` 自由倒下，小车只沿 X 移动；两次重置运行 CSV 完全一致。
-- A2：`+2 N` 产生 `dx=+0.02350 m`，`-2 N` 产生 `dx=-0.02767 m`，传感器和施力方向正确。
-
-详见 [docs/A1-acceptance.md](docs/A1-acceptance.md) 和 [docs/A2-acceptance.md](docs/A2-acceptance.md)。
-
 ## 备注
 
-- A1/A2/A4 的控制器和数据保留为历史验证；当前世界已切换为 A5 LQR。
-- 该世界没有 `Background` 和地板，3D 背景为黑色是正常的；验收看轨道、小车和摆杆是否可见。
-- A5 最大力 `3.344 N` 未达到 `±10 N` 限幅，不是靠饱和硬撑。
+- A1/A2/A4/A5 的数据保留为历史验证；当前世界已加入 A6 工况选择。
+- 该世界没有 `Background` 和地板，3D 背景为黑色是正常的。
+- 质量摄动只改摆杆 `0.24 → 0.30 kg`，控制器增益不重新整定。
 
-## 下一步：A6
+## 下一步：A7
 
-用 `a4_pid_balance.csv` 和 `a5_lqr_balance.csv` 做同工况对比，再补位置阶跃和扰动测试，比较 LQR 与级联 PID 的恢复速度、峰值和稳态误差。
+用六份 `a6_*.csv` 生成对照曲线，计算从事件发生到位置和摆角同时进入误差带、并保持的时间，完成 LQR 与级联 PID 的最终对比。

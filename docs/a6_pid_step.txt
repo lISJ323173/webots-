@@ -1,0 +1,3 @@
+INFO: cart_pole_pid: Starting controller: python.exe -u cart_pole_pid.py step
+START mode=pid case=step theta=+0.0802 rad F=+3.742 N
+A6 mode=pid case=step peak_x=0.1943 m tail_x=0.0059 m tail_theta=0.0003 rad

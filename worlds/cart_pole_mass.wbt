@@ -1,0 +1,66 @@
+#VRML_SIM R2025a utf8
+
+WorldInfo {
+  coordinateSystem "ENU"
+  basicTimeStep 8
+}
+Viewpoint {
+  orientation -0.184267 0.184267 0.965449 1.605951
+  position 0 -2.6 1.35
+}
+DirectionalLight { direction -1 1 -2 }
+Shape {
+  appearance PBRAppearance { baseColor 0.35 0.38 0.42 roughness 1 metalness 0 }
+  geometry Box { size 3.4 0.08 0.04 }
+}
+Robot {
+  name "cart_pole"
+  controller "cart_pole_lqr"
+  controllerArgs [ "mass" ]
+  children [
+    SliderJoint {
+      jointParameters JointParameters {
+        axis 1 0 0
+        minStop -1.5
+        maxStop 1.5
+      }
+      device [
+        LinearMotor { name "cart_motor" maxForce 10 }
+        PositionSensor { name "cart_position" }
+      ]
+      endPoint Solid {
+        translation 0 0 0.08
+        name "cart"
+        children [
+          Shape {
+            appearance PBRAppearance { baseColor 0.1 0.4 0.85 roughness 1 metalness 0 }
+            geometry DEF CART_BOX Box { size 0.28 0.18 0.10 }
+          }
+          HingeJoint {
+            jointParameters HingeJointParameters {
+              axis 0 1 0
+              anchor 0 0 0.06
+              position 0.08
+              minStop -1.4
+              maxStop 1.4
+            }
+            device [ PositionSensor { name "pole_angle" } ]
+            endPoint Solid {
+              translation 0 0 0.06
+              rotation 0 1 0 0.08
+              name "pole"
+              children [ DEF POLE_BODY Pose {
+                translation 0 0 0.25
+                children [ Shape { geometry Box { size 0.025 0.025 0.50 } } ]
+              } ]
+              boundingObject USE POLE_BODY
+              physics Physics { density -1 mass 0.30 }
+            }
+          }
+        ]
+        boundingObject USE CART_BOX
+        physics Physics { density -1 mass 1 }
+      }
+    }
+  ]
+}

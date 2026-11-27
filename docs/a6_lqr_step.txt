@@ -1,0 +1,3 @@
+INFO: cart_pole_lqr: Starting controller: python.exe -u cart_pole_lqr.py step
+START mode=lqr case=step theta=+0.0802 rad F=+3.344 N
+A6 mode=lqr case=step peak_x=0.2058 m tail_x=0.0028 m tail_theta=0.0003 rad
