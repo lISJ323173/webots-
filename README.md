@@ -11,6 +11,11 @@ Webots R2025a 的一阶倒立摆（cart-pole）仿真项目。
 - A5：离散 LQR 站立 10 s。
 - A6：PID/LQR × `step`/`pulse`/`mass` 六组同工况对比。
 
+文档入口：
+
+- [开发文档：控制框图、复现步骤、实验结论](docs/development.md)
+- [演示视频 demo.mp4](docs/demo.mp4)
+
 当前基础世界 `worlds/cart_pole.wbt` 默认：
 
 ```text
@@ -74,6 +79,8 @@ cart-pole-webots/
     A4-acceptance.md
     A5-acceptance.md
     A6-acceptance.md
+    development.md                  # 控制框图、复现步骤、实验结论
+    demo.mp4                        # 演示视频
     a1-initial.png
     a1-fall.png
     a1-verification.txt
