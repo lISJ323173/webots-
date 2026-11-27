@@ -15,8 +15,7 @@ Shape {
 }
 Robot {
   name "cart_pole"
-  controller "cart_pole_probe"
-  controllerArgs [ "2.0" ]
+  controller "cart_pole_pid"
   children [
     SliderJoint {
       jointParameters JointParameters {

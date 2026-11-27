@@ -1,0 +1,3 @@
+INFO: cart_pole_pid: Starting controller: python.exe -u cart_pole_pid.py
+START theta=+0.0802 rad F=+3.742 N
+A4 peak_x=0.0934 m tail_x=0.0004 m tail_theta=0.0002 rad

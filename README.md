@@ -2,13 +2,17 @@
 
 Webots R2025a 的一阶倒立摆（cart-pole）仿真项目。
 
-A1 完成了**被动开环模型**：小车只能沿世界 X 轴直线滑动，摆杆从 `+0.08 rad` 的初始倾角开始在重力作用下绕 Y 轴自由倒下。A2 在此基础上加入 `LinearMotor` 和只读探针控制器，验证 Python 能读取小车位置、摆杆角度，并按 `+X` / `-X` 方向施力。
+已完成从被动模型到闭环站立的验证链：
 
-当前 `worlds/cart_pole.wbt` 是 A2 配置：
+- A1：被动 cart-pole，小车只沿 X 移动，摆杆自由倒下。
+- A2：Python 读取 `x`、`θ`，并验证 `±2 N` 施力方向。
+- A3：非线性动力学、A2 开环对照、直立点线性化。
+- A4：级联 PD-PID 站立 10 s。
+
+当前 `worlds/cart_pole.wbt` 使用 A4 控制器：
 
 ```text
-controller "cart_pole_probe"
-controllerArgs [ "2.0" ]
+controller "cart_pole_pid"
 ```
 
 ## 当前状态
@@ -17,7 +21,8 @@ controllerArgs [ "2.0" ]
 - A1 被动模型：通过
 - A2 传感器与施力方向：通过
 - A3 动力学模型与开环校验：完成
-- A4 级联 PID 闭环站立：待开始
+- A4 级联 PD-PID 站立：通过
+- A5 LQR 与 PID 对比：待开始
 
 ## 模型参数
 
@@ -28,83 +33,74 @@ controllerArgs [ "2.0" ]
 | `L` | 摆杆长度 | `0.50 m` |
 | `l` | 铰点到摆杆质心距离 | `0.25 m` |
 | `J_y` | 摆杆绕质心、平行于铰轴的转动惯量 | `0.00501 kg·m²` |
+| `I_p` | 摆杆绕铰点转动惯量 | `0.0200125 kg·m²` |
 | — | 小车行程 | `-1.50 ～ +1.50 m` |
 | `θ₀` | 摆杆初始倾角 | `+0.08 rad` |
 | — | 仿真步长 | `8 ms` |
-
-`J_y` 由均匀刚性杆 `m(L² + w²)/12` 计算，其中截面宽度 `w = 0.025 m`，约为 `0.00501 kg·m²`。
 
 ## 坐标与符号约定
 
 - 世界坐标系：`ENU`，`+X` 向右，`+Y` 为铰轴方向，`+Z` 向上。
 - 直立为 `θ = 0 rad`；杆顶向 `+X` 倾斜为正。
 - 控制输入定义为小车沿 `+X` 的力 `F`，单位 `N`。
-- `cart_position` 位置传感器单位为米；`pole_angle` 位置传感器单位为弧度。
+- `cart_position` 单位为米；`pole_angle` 单位为弧度。
 
 ## 文件结构
 
 ```text
 cart-pole-webots/
-  worlds/cart_pole.wbt                  # 当前 A2 世界
-  controllers/cart_pole_probe/
-    cart_pole_probe.py                  # A2 传感器/施力探针
+  worlds/cart_pole.wbt                  # 当前 A4 世界
+  controllers/
+    cart_pole_pid/cart_pole_pid.py      # A4 级联 PD-PID
+    cart_pole_probe/cart_pole_probe.py  # A2 探针（历史）
   docs/
-    a1-initial.png                      # A1 初始姿态
-    a1-fall.png                         # A1 摆杆倒下
-    a1-verification.txt                 # A1 数值摘要
-    a1-probe-run1.csv                   # A1 8 ms 采样，第 1 次
-    a1-probe-run2.csv                   # A1 8 ms 采样，第 2 次
     A1-acceptance.md                    # A1 验收记录
     A2-acceptance.md                    # A2 验收记录
-    a2-positive.txt                     # A2 +2 N Console 输出
-    a2-negative.txt                     # A2 -2 N Console 输出
+    A4-acceptance.md                    # A4 验收记录
+    a1-initial.png
+    a1-fall.png
+    a1-verification.txt
+    a1-probe-run1.csv
+    a1-probe-run2.csv
+    a2-positive.txt
+    a2-negative.txt
     model.md                            # A3 动力学模型与开环校验
+    a4-console.txt                      # A4 Console 输出
+  a4_pid_balance.csv                    # A4 10 s / 8 ms 数据
   README.md
 ```
 
-## 运行方法：A2 默认正向测试
+## 运行 A4
 
-1. 使用 Webots R2025a，`File → Open World` 打开 `worlds/cart_pole.wbt`。
-2. 确认 `controllerArgs` 为 `[ "2.0" ]`。
-3. 先 `Pause`，再 `Reset Simulation`，确认时间为 `0:00:00:000`。
-4. 切换 `Real-time` 并运行。控制器会：
-   - 先空走一步，采集 `x0`、`theta0`；
-   - 施加 `+2.0 N` 共 20 步（160 ms）；
-   - 打印 `START` 和 `END`，随后把力设回 0 并继续空走。
-5. 在底部 `Console` 查看两行输出，然后 `Pause`。
+1. Webots R2025a → `File → Open World` → `worlds/cart_pole.wbt`。
+2. `Pause` → `Reset Simulation`，确认时间为 `0:00:00:000`。
+3. 使用 `Real-time` 或 `Fast` 运行。控制器会记录 10 s 数据：
+   - 位置外环 PD 产生 `θ_ref`；
+   - 角度内环 PID 产生 `F`；
+   - 力限幅 `±10 N`，积分限幅 `±0.25 rad·s`。
+4. Console 出现 `A4` 行后 `Pause`；项目根目录生成 `a4_pid_balance.csv`。
 
-预期：
-
-```text
-START F=+2.00 N x≈0 m theta≈+0.08 rad
-END   dx > 0
-```
-
-## 反向测试
-
-1. 在 VS Code 中把 `controllerArgs` 改为 `[ "-2.0" ]`。
-2. 保存后，在 Webots 中 `Reload World`（或重新打开世界）。
-3. 按上面的步骤运行，确认 `START` 打印 `F=-2.00 N`，并且 `END` 的 `dx < 0`。
-
-## A2 验收结果
-
-正向 `F = +2.00 N`：
+## A4 结果
 
 ```text
-START F=+2.00 N x=-0.00001 m theta=+0.08018 rad
-END pulse=160 ms dx=+0.02350 m theta=+0.04243 rad
+START theta=+0.0802 rad F=+3.742 N
+A4 peak_x=0.0934 m tail_x=0.0004 m tail_theta=0.0002 rad
 ```
 
-反向 `F = -2.00 N`：
+| 检查项 | 通过标准 | 实测 |
+|---|---|---|
+| 初始角度 | 接近 `+0.08 rad` | `+0.08018 rad` |
+| 首拍力 | `F > 0 N` | `+3.742 N` |
+| 时长 | 10 s | 10.000 s，1251 行 |
+| 摆杆 | 不碰 `±1.4 rad` 限位 | 最大 `|θ| = 0.08018 rad` |
+| 小车峰值 | `peak_x ≤ 0.30 m` | `0.09343 m` |
+| 最后 2 s 小车 | `tail_x ≤ 0.05 m` | `0.00044 m` |
+| 最后 2 s 摆角 | `tail_theta ≤ 0.02 rad` | `0.00023 rad` |
+| 力饱和 | 不持续饱和 | 最大 `3.742 N < 10 N` |
 
-```text
-START F=-2.00 N x=-0.00001 m theta=+0.08018 rad
-END pulse=160 ms dx=-0.02767 m theta=+0.20537 rad
-```
+完整记录见 [docs/A4-acceptance.md](docs/A4-acceptance.md)。
 
-两次初始 `x` 都接近 0，`θ` 都接近 `+0.08 rad`；`+2 N` 产生 `dx > 0`，`-2 N` 产生 `dx < 0`，方向正确。详细记录见 [docs/A2-acceptance.md](docs/A2-acceptance.md)。
-
-## A3 动力学模型与开环校验
+## A3 动力学模型
 
 非线性模型：
 
@@ -113,14 +109,14 @@ END pulse=160 ms dx=-0.02767 m theta=+0.20537 rad
 Ip θ¨ + ml cosθ x¨ = mgl sinθ
 ```
 
-其中 `Ip = Jy + ml² = 0.0200125 kg·m²`。用这组方程复算 A2 的 160 ms 脉冲：
+A2 开环对照：
 
 | 脉冲 | Webots dx | 模型 dx | Webots 末端 θ | 模型末端 θ |
 |---|---:|---:|---:|---:|
 | `+2.00 N` | `+0.02350 m` | `+0.02237 m` | `+0.04243 rad` | `+0.04443 rad` |
 | `-2.00 N` | `-0.02767 m` | `-0.02635 m` | `+0.20537 rad` | `+0.19913 rad` |
 
-最大绝对误差：位移 `0.00132 m`，末端摆角 `0.00624 rad`。方向和量级一致，可作为控制器初始设计模型。
+最大绝对误差：位移 `0.00132 m`，末端摆角 `0.00624 rad`。
 
 直立点线性化：
 
@@ -132,11 +128,23 @@ A = [0  1   0       0;
 B = [0; 0.9433; 0; -2.8281]
 ```
 
-开环正特征值约 `5.87 s⁻¹`，直立点不稳定。完整推导、假设和误差讨论见 [docs/model.md](docs/model.md)。
+开环正特征值约 `5.87 s⁻¹`。完整推导见 [docs/model.md](docs/model.md)。
+
+## A2 验收结果（历史记录）
+
+```text
+START F=+2.00 N x=-0.00001 m theta=+0.08018 rad
+END pulse=160 ms dx=+0.02350 m theta=+0.04243 rad
+
+START F=-2.00 N x=-0.00001 m theta=+0.08018 rad
+END pulse=160 ms dx=-0.02767 m theta=+0.20537 rad
+```
+
+`+2 N` 使 `dx > 0`，`-2 N` 使 `dx < 0`；详细记录见 [docs/A2-acceptance.md](docs/A2-acceptance.md)。
 
 ## A1 验收结果（历史记录）
 
-A1 使用 `controller "<none>"` 的被动世界，验证结果如下：
+A1 使用 `controller "<none>"` 的被动世界：
 
 | 检查项 | 实测结果 |
 |---|---|
@@ -146,7 +154,6 @@ A1 使用 `controller "<none>"` 的被动世界，验证结果如下：
 | 小车 X | `0 → -0.043815 m`（向 `-X` 退约 `4.4 cm`） |
 | 小车 Y | 全程 `0.000000 m` |
 | 小车 Z | `0.079991 ～ 0.079999 m` |
-| Console | 空，无解析错误 |
 | 重置可复现 | 两次独立运行 CSV 字节完全一致 |
 
 ![A1 初始状态](docs/a1-initial.png)
@@ -157,11 +164,11 @@ A1 使用 `controller "<none>"` 的被动世界，验证结果如下：
 
 ## 备注
 
-- `HingeJoint` 的硬限位为 `±1.4 rad`；A1 中摆杆约 `0.624 s` 就到达 `+1.4 rad`，所以 1 s 截图看起来已经停住，这是模型限位。
+- A1/A2 的被动世界和探针控制器保留为历史验证；当前世界已切换为 A4 闭环控制器。
 - 该世界没有 `Background` 和地板，3D 背景为黑色是正常的；验收看轨道、小车和摆杆是否可见。
-- 原始 `Viewpoint` 的 `orientation 1 0 0 1.2` 绕 X 轴滚转，视线仍沿 X 轴，导致相机在 `y=-3` 时看不到 `y=0` 的模型。A1 已修正 Viewpoint；模型参数未改动。
-- A2 的 160 ms 脉冲后摆杆继续倒下是正常现象，A2 只验证传感器和施力方向，不要求摆杆保持直立。
+- 原始 `Viewpoint` 已修正；A1 的模型参数未改动。
+- A4 的最大力 `3.742 N` 未达到 `±10 N` 限幅，不是靠饱和硬撑。
 
-## 下一步：A4
+## 下一步：A5
 
-A4 只做级联 PID 的第一条闭环站立曲线：先用内环/外环结构把摆杆稳定在直立附近，再与 LQR 的响应做对比。
+做 LQR 与级联 PID 的对比：同一初始姿态、同一 Webots 模型，比较站立恢复、位置阶跃和扰动响应。
