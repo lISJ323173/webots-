@@ -1,0 +1,3 @@
+INFO: cart_pole_probe: Starting controller: python.exe -u cart_pole_probe.py 2.0
+START F=+2.00 N x=-0.00001 m theta=+0.08018 rad
+END pulse=160 ms dx=+0.02350 m theta=+0.04243 rad

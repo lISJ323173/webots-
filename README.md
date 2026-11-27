@@ -2,13 +2,21 @@
 
 Webots R2025a 的一阶倒立摆（cart-pole）仿真项目。
 
-A1 阶段完成**被动开环模型**：小车只能沿世界 X 轴直线滑动，摆杆从 `+0.08 rad` 的初始倾角开始在重力作用下绕 Y 轴自由倒下。当前世界不包含电机或控制器，控制器字段为 `<none>`。
+A1 完成了**被动开环模型**：小车只能沿世界 X 轴直线滑动，摆杆从 `+0.08 rad` 的初始倾角开始在重力作用下绕 Y 轴自由倒下。A2 在此基础上加入 `LinearMotor` 和只读探针控制器，验证 Python 能读取小车位置、摆杆角度，并按 `+X` / `-X` 方向施力。
+
+当前 `worlds/cart_pole.wbt` 是 A2 配置：
+
+```text
+controller "cart_pole_probe"
+controllerArgs [ "2.0" ]
+```
 
 ## 当前状态
 
 - A0 环境验收：通过（Webots R2025a，Python 3.14.7 64-bit）
 - A1 被动模型：通过
-- A2 Python 控制器：待开始
+- A2 传感器与施力方向：通过
+- A3 动力学建模与闭环控制器：待开始
 
 ## 模型参数
 
@@ -29,36 +37,74 @@ A1 阶段完成**被动开环模型**：小车只能沿世界 X 轴直线滑动�
 
 - 世界坐标系：`ENU`，`+X` 向右，`+Y` 为铰轴方向，`+Z` 向上。
 - 直立为 `θ = 0 rad`；杆顶向 `+X` 倾斜为正。
-- 后续控制输入定义为小车沿 `+X` 的力 `F`，单位 `N`。
+- 控制输入定义为小车沿 `+X` 的力 `F`，单位 `N`。
 - `cart_position` 位置传感器单位为米；`pole_angle` 位置传感器单位为弧度。
 
 ## 文件结构
 
 ```text
 cart-pole-webots/
-  worlds/cart_pole.wbt          # A1 被动 cart-pole 世界
+  worlds/cart_pole.wbt                  # 当前 A2 世界
+  controllers/cart_pole_probe/
+    cart_pole_probe.py                  # A2 传感器/施力探针
   docs/
-    a1-initial.png              # 初始姿态
-    a1-fall.png                 # 摆杆倒下
-    a1-verification.txt         # A1 数值摘要
-    a1-probe-run1.csv           # 8 ms 采样，第 1 次
-    a1-probe-run2.csv           # 8 ms 采样，第 2 次（与第 1 次一致）
-    A1-acceptance.md            # A1 验收记录
+    a1-initial.png                      # A1 初始姿态
+    a1-fall.png                         # A1 摆杆倒下
+    a1-verification.txt                 # A1 数值摘要
+    a1-probe-run1.csv                   # A1 8 ms 采样，第 1 次
+    a1-probe-run2.csv                   # A1 8 ms 采样，第 2 次
+    A1-acceptance.md                    # A1 验收记录
+    A2-acceptance.md                    # A2 验收记录
+    a2-positive.txt                     # A2 +2 N Console 输出
+    a2-negative.txt                     # A2 -2 N Console 输出
   README.md
 ```
 
-## 运行方法
+## 运行方法：A2 默认正向测试
 
-1. 使用 Webots R2025a，选择 `File → Open World`，打开 `worlds/cart_pole.wbt`。
-2. 模型没有控制器和电机，`Robot.controller` 为 `<none>`，摆杆只受重力和关节约束。
-3. 打开后先 `Pause`，再 `Reset Simulation`，确认时间为 `0:00:00:000`。
-4. 切换 `Real-time`，点击运行，约 1 s 后暂停观察。
-5. 预期行为：
-   - 摆杆从 `+0.08 rad` 开始向 `+X` 倒下；
-   - 小车受到反作用，向 `-X` 后退约 `4.4 cm`；
-   - 小车 `y = 0`，`z` 保持在 `0.08 m` 附近，不侧移、不下坠。
+1. 使用 Webots R2025a，`File → Open World` 打开 `worlds/cart_pole.wbt`。
+2. 确认 `controllerArgs` 为 `[ "2.0" ]`。
+3. 先 `Pause`，再 `Reset Simulation`，确认时间为 `0:00:00:000`。
+4. 切换 `Real-time` 并运行。控制器会：
+   - 先空走一步，采集 `x0`、`theta0`；
+   - 施加 `+2.0 N` 共 20 步（160 ms）；
+   - 打印 `START` 和 `END`，随后把力设回 0 并继续空走。
+5. 在底部 `Console` 查看两行输出，然后 `Pause`。
 
-## A1 验收结果
+预期：
+
+```text
+START F=+2.00 N x≈0 m theta≈+0.08 rad
+END   dx > 0
+```
+
+## 反向测试
+
+1. 在 VS Code 中把 `controllerArgs` 改为 `[ "-2.0" ]`。
+2. 保存后，在 Webots 中 `Reload World`（或重新打开世界）。
+3. 按上面的步骤运行，确认 `START` 打印 `F=-2.00 N`，并且 `END` 的 `dx < 0`。
+
+## A2 验收结果
+
+正向 `F = +2.00 N`：
+
+```text
+START F=+2.00 N x=-0.00001 m theta=+0.08018 rad
+END pulse=160 ms dx=+0.02350 m theta=+0.04243 rad
+```
+
+反向 `F = -2.00 N`：
+
+```text
+START F=-2.00 N x=-0.00001 m theta=+0.08018 rad
+END pulse=160 ms dx=-0.02767 m theta=+0.20537 rad
+```
+
+两次初始 `x` 都接近 0，`θ` 都接近 `+0.08 rad`；`+2 N` 产生 `dx > 0`，`-2 N` 产生 `dx < 0`，方向正确。详细记录见 [docs/A2-acceptance.md](docs/A2-acceptance.md)。
+
+## A1 验收结果（历史记录）
+
+A1 使用 `controller "<none>"` 的被动世界，验证结果如下：
 
 | 检查项 | 实测结果 |
 |---|---|
@@ -75,14 +121,15 @@ cart-pole-webots/
 
 ![A1 摆杆倒下](docs/a1-fall.png)
 
-详细验收记录见 [docs/A1-acceptance.md](docs/A1-acceptance.md)。
+详细记录见 [docs/A1-acceptance.md](docs/A1-acceptance.md)。
 
 ## 备注
 
-- `HingeJoint` 的硬限位为 `±1.4 rad`，摆杆在约 `0.624 s` 就到达 `+1.4 rad`，因此 1 s 截图看起来已经停住，这是模型限位，不是控制器或物理异常。
+- `HingeJoint` 的硬限位为 `±1.4 rad`；A1 中摆杆约 `0.624 s` 就到达 `+1.4 rad`，所以 1 s 截图看起来已经停住，这是模型限位。
 - 该世界没有 `Background` 和地板，3D 背景为黑色是正常的；验收看轨道、小车和摆杆是否可见。
 - 原始 `Viewpoint` 的 `orientation 1 0 0 1.2` 绕 X 轴滚转，视线仍沿 X 轴，导致相机在 `y=-3` 时看不到 `y=0` 的模型。A1 已修正 Viewpoint；模型参数未改动。
+- A2 的 160 ms 脉冲后摆杆继续倒下是正常现象，A2 只验证传感器和施力方向，不要求摆杆保持直立。
 
-## 下一步：A2
+## 下一步：A3
 
-接入 Python 控制器，读取 `cart_position` 和 `pole_angle`，验证位置、角度和施力方向，然后实现闭环平衡控制。
+在 A2 已确认的传感器符号和施力方向基础上，进行动力学建模、参数核对和闭环平衡控制器设计。

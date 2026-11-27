@@ -15,7 +15,8 @@ Shape {
 }
 Robot {
   name "cart_pole"
-  controller "<none>"
+  controller "cart_pole_probe"
+  controllerArgs [ "2.0" ]
   children [
     SliderJoint {
       jointParameters JointParameters {
@@ -23,7 +24,10 @@ Robot {
         minStop -1.5
         maxStop 1.5
       }
-      device [ PositionSensor { name "cart_position" } ]
+      device [
+        LinearMotor { name "cart_motor" maxForce 10 }
+        PositionSensor { name "cart_position" }
+      ]
       endPoint Solid {
         translation 0 0 0.08
         name "cart"
